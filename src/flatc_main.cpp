@@ -91,6 +91,11 @@ int main(int argc, const char *argv[]) {
       flatbuffers::IDLOptions::kPhp,
       "Generate PHP files for tables/structs",
       flatbuffers::GeneralMakeRule },
+    { flatbuffers::GenerateSwift,  "-w", "--swift", "Swift",
+        nullptr,
+        flatbuffers::IDLOptions::kSwift,
+        "Generate Swift classes for tables/structs",
+        flatbuffers::GeneralMakeRule },
     };
 
   flatbuffers::FlatCompiler::InitParams params;

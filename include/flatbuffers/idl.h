@@ -31,69 +31,70 @@
 
 namespace flatbuffers {
 
-// The order of these matters for Is*() functions below.
-// Additionally, Parser::ParseType assumes bool..string is a contiguous range
-// of type tokens.
+    // The order of these matters for Is*() functions below.
+    // Additionally, Parser::ParseType assumes bool..string is a contiguous range
+    // of type tokens.
 #define FLATBUFFERS_GEN_TYPES_SCALAR(TD) \
-  TD(NONE,   "",       uint8_t,  byte,   byte,    byte,   uint8) \
-  TD(UTYPE,  "",       uint8_t,  byte,   byte,    byte,   uint8) /* begin scalar/int */ \
-  TD(BOOL,   "bool",   uint8_t,  boolean,byte,    bool,   bool) \
-  TD(CHAR,   "byte",   int8_t,   byte,   int8,    sbyte,  int8) \
-  TD(UCHAR,  "ubyte",  uint8_t,  byte,   byte,    byte,   uint8) \
-  TD(SHORT,  "short",  int16_t,  short,  int16,   short,  int16) \
-  TD(USHORT, "ushort", uint16_t, short,  uint16,  ushort, uint16) \
-  TD(INT,    "int",    int32_t,  int,    int32,   int,    int32) \
-  TD(UINT,   "uint",   uint32_t, int,    uint32,  uint,   uint32) \
-  TD(LONG,   "long",   int64_t,  long,   int64,   long,   int64) \
-  TD(ULONG,  "ulong",  uint64_t, long,   uint64,  ulong,  uint64) /* end int */ \
-  TD(FLOAT,  "float",  float,    float,  float32, float,  float32) /* begin float */ \
-  TD(DOUBLE, "double", double,   double, float64, double, float64) /* end float/scalar */
+TD(NONE,   "",       uint8_t,  byte,   byte,    byte,   uint8,   UInt8) \
+TD(UTYPE,  "",       uint8_t,  byte,   byte,    byte,   uint8,   UInt8) /* begin scalar/int */ \
+TD(BOOL,   "bool",   uint8_t,  boolean,byte,    bool,   bool,    Bool) \
+TD(CHAR,   "byte",   int8_t,   byte,   int8,    sbyte,  int8,    Int8) \
+TD(UCHAR,  "ubyte",  uint8_t,  byte,   byte,    byte,   uint8,   UInt8) \
+TD(SHORT,  "short",  int16_t,  short,  int16,   short,  int16,   Int16) \
+TD(USHORT, "ushort", uint16_t, short,  uint16,  ushort, uint16,  UInt16) \
+TD(INT,    "int",    int32_t,  int,    int32,   int,    int32,   Int32) \
+TD(UINT,   "uint",   uint32_t, int,    uint32,  uint,   uint32,  UInt32) \
+TD(LONG,   "long",   int64_t,  long,   int64,   long,   int64,   Int64) \
+TD(ULONG,  "ulong",  uint64_t, long,   uint64,  ulong,  uint64,  UInt64) /* end int */ \
+TD(FLOAT,  "float",  float,    float,  float32, float,  float32, Float) /* begin float */ \
+TD(DOUBLE, "double", double,   double, float64, double, float64, Double) /* end float/scalar */
 #define FLATBUFFERS_GEN_TYPES_POINTER(TD) \
-  TD(STRING, "string", Offset<void>, int, int, StringOffset, int) \
-  TD(VECTOR, "",       Offset<void>, int, int, VectorOffset, int) \
-  TD(STRUCT, "",       Offset<void>, int, int, int, int) \
-  TD(UNION,  "",       Offset<void>, int, int, int, int)
-
-// The fields are:
-// - enum
-// - FlatBuffers schema type.
-// - C++ type.
-// - Java type.
-// - Go type.
-// - C# / .Net type.
-// - Python type.
-
-// using these macros, we can now write code dealing with types just once, e.g.
-
-/*
-switch (type) {
-  #define FLATBUFFERS_TD(ENUM, IDLTYPE, CTYPE, JTYPE, GTYPE, NTYPE, PTYPE) \
-    case BASE_TYPE_ ## ENUM: \
-      // do something specific to CTYPE here
-    FLATBUFFERS_GEN_TYPES(FLATBUFFERS_TD)
-  #undef FLATBUFFERS_TD
-}
-*/
-
+TD(STRING, "string", Offset<void>, int, int, StringOffset, int, StringOffset) \
+TD(VECTOR, "",       Offset<void>, int, int, VectorOffset, int, VectorOffset) \
+TD(STRUCT, "",       Offset<void>, int, int, int, int, Int32) \
+TD(UNION,  "",       Offset<void>, int, int, int, int, Int32)
+    
+    // The fields are:
+    // - enum
+    // - FlatBuffers schema type.
+    // - C++ type.
+    // - Java type.
+    // - Go type.
+    // - C# / .Net type.
+    // - Python type.
+    // - Swift type.
+    
+    // using these macros, we can now write code dealing with types just once, e.g.
+    
+    /*
+     switch (type) {
+     #define FLATBUFFERS_TD(ENUM, IDLTYPE, CTYPE, JTYPE, GTYPE, NTYPE, PTYPE, STYPE) \
+     case BASE_TYPE_ ## ENUM: \
+     // do something specific to CTYPE here
+     FLATBUFFERS_GEN_TYPES(FLATBUFFERS_TD)
+     #undef FLATBUFFERS_TD
+     }
+     */
+    
 #define FLATBUFFERS_GEN_TYPES(TD) \
-        FLATBUFFERS_GEN_TYPES_SCALAR(TD) \
-        FLATBUFFERS_GEN_TYPES_POINTER(TD)
-
-// Create an enum for all the types above.
+FLATBUFFERS_GEN_TYPES_SCALAR(TD) \
+FLATBUFFERS_GEN_TYPES_POINTER(TD)
+    
+    // Create an enum for all the types above.
 #ifdef __GNUC__
-__extension__  // Stop GCC complaining about trailing comma with -Wpendantic.
+    __extension__  // Stop GCC complaining about trailing comma with -Wpendantic.
 #endif
-enum BaseType {
-  #define FLATBUFFERS_TD(ENUM, IDLTYPE, CTYPE, JTYPE, GTYPE, NTYPE, PTYPE) \
-      BASE_TYPE_ ## ENUM,
+    enum BaseType {
+#define FLATBUFFERS_TD(ENUM, IDLTYPE, CTYPE, JTYPE, GTYPE, NTYPE, PTYPE, STYPE) \
+BASE_TYPE_ ## ENUM,
+        FLATBUFFERS_GEN_TYPES(FLATBUFFERS_TD)
+#undef FLATBUFFERS_TD
+    };
+    
+#define FLATBUFFERS_TD(ENUM, IDLTYPE, CTYPE, JTYPE, GTYPE, NTYPE, PTYPE, STYPE) \
+static_assert(sizeof(CTYPE) <= sizeof(largest_scalar_t), \
+"define largest_scalar_t as " #CTYPE);
     FLATBUFFERS_GEN_TYPES(FLATBUFFERS_TD)
-  #undef FLATBUFFERS_TD
-};
-
-#define FLATBUFFERS_TD(ENUM, IDLTYPE, CTYPE, JTYPE, GTYPE, NTYPE, PTYPE) \
-    static_assert(sizeof(CTYPE) <= sizeof(largest_scalar_t), \
-                  "define largest_scalar_t as " #CTYPE);
-  FLATBUFFERS_GEN_TYPES(FLATBUFFERS_TD)
 #undef FLATBUFFERS_TD
 
 inline bool IsScalar (BaseType t) { return t >= BASE_TYPE_UTYPE &&
@@ -371,6 +372,7 @@ struct IDLOptions {
     kPhp    = 1 << 6,
     kJson   = 1 << 7,
     kBinary = 1 << 8,
+    kSwift  = 1 << 9,
     kMAX
   };
 
@@ -686,6 +688,12 @@ extern bool GeneratePython(const Parser &parser,
 extern bool GenerateCSharp(const Parser &parser,
                            const std::string &path,
                            const std::string &file_name);
+    
+// Generate Swift files from the definitions in the Parser object.
+// See idl_gen_swift.cpp.
+extern bool GenerateSwift(const Parser &parser,
+                            const std::string &path,
+                            const std::string &file_name);
 
 // Generate Java/C#/.. files from the definitions in the Parser object.
 // See idl_gen_general.cpp.
