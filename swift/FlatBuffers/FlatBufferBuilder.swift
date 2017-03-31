@@ -490,7 +490,7 @@ public final class FlatBufferBuilder {
         notNested()
         addUInt8(0)
         
-        let utf8StringLen = s.utf8CString.count
+        let utf8StringLen = s.utf8.count
         startVector(elemSize: 1, count: utf8StringLen, alignment: 1)
         _space -= utf8StringLen
         
@@ -646,7 +646,7 @@ public final class FlatBufferBuilder {
         self.prep(size: _minAlign, additionalBytes: MemoryLayout<Int32>.size +
             FlatBufferConstants.FileIdentifierLength)
         
-        assert(fileIdentifier.utf8CString.count == FlatBufferConstants.FileIdentifierLength, "FlatBuffers: file identifier must be length \(FlatBufferConstants.FileIdentifierLength)")
+        assert(fileIdentifier.utf8.count == FlatBufferConstants.FileIdentifierLength, "FlatBuffers: file identifier must be length \(FlatBufferConstants.FileIdentifierLength)")
     
         for i in (0..<FlatBufferConstants.FileIdentifierLength).reversed() {
             self.addUInt8(UInt8(bitPattern: fileIdentifier.utf8CString[i]))
