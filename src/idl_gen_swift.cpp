@@ -178,7 +178,15 @@ namespace flatbuffers {
             }
             
             // Mask to turn serialized value into destination type value.
-            std::string DestinationMask() {
+            std::string DestinationMask(const Type &type) {
+                if (type.base_type == BASE_TYPE_VECTOR) {
+                    return DestinationCast(type.VectorType());
+                } else {
+                    // Cast from raw integral types to enum.
+                    if (IsEnum(type)) {
+                        return ")!";
+                    }
+                }
                 return "";
             }
             
@@ -188,7 +196,9 @@ namespace flatbuffers {
                     return DestinationCast(type.VectorType());
                 } else {
                     // Cast from raw integral types to enum.
-                    if (IsEnum(type)) return type.enum_def->name + "(rawValue: )!";
+                    if (IsEnum(type)) {
+                       return type.enum_def->name + "(rawValue: ";
+                    }
                 }
                 return "";
             }
@@ -230,7 +240,7 @@ namespace flatbuffers {
                 for (auto it = vec.begin(); it != vec.end(); ++it) {
                     auto enum_val = **it;
                     if (enum_val.value == default_value) {
-                        result = enum_def->name + "." + enum_val.name;
+                        result = enum_def->name + "." + ((enum_val.name == "NONE") ? "none" : enum_val.name);
                         break;
                     }
                 }
@@ -270,12 +280,12 @@ namespace flatbuffers {
                     if (enableLangOverrides) {
                             switch (value.type.base_type) {
                                 case BASE_TYPE_STRING:
-                                    return "StringOffset()";
+                                    return "StringOffset(0)";
                                 case BASE_TYPE_STRUCT:
                                     return "Offset<" + value.type.struct_def->name +
-                                    ">()";
+                                    ">(0)";
                                 case BASE_TYPE_VECTOR:
-                                    return "VectorOffset()";
+                                    return "VectorOffset(0)";
                                 default:
                                     break;
                             }
@@ -294,11 +304,6 @@ namespace flatbuffers {
                 if (enum_def.generated) return;
                 
                 
-                // Generate enum definitions of the form:
-                // public static (final) int name = value;
-                // In Java, we use ints rather than the Enum feature, because we want them
-                // to map directly to how they're used in C/C++ and file formats.
-                // That, and Java Enums are expensive, and not universally liked.
                 GenComment(enum_def.doc_comment, code_ptr, &commentConfig);
                 code += std::string("public enum ") + enum_def.name;
                     code += " : " +
@@ -309,7 +314,7 @@ namespace flatbuffers {
                      ++it) {
                     auto &ev = **it;
                     GenComment(ev.doc_comment, code_ptr, &commentConfig, "  ");
-                    code += "\tcase " + (ev.name == "NONE" ? "none" : MakeCamel(ev.name, false)) + " = ";
+                    code += "    case " + (ev.name == "NONE" ? "none" : MakeCamel(ev.name, false)) + " = ";
                     code += NumToString(ev.value);
                     code += "\n";
                 }
@@ -335,7 +340,7 @@ namespace flatbuffers {
                             code += "\"" + (name == "NONE" ? "none" : MakeCamel(name, false)) + "\", ";
                         }
                         code += "]\n\n";
-                        code += "  public func";
+                        code += "  public static func";
                         code += " " + MakeCamel("name", false);
                         code += "(_ e: Int) -> String { return names[e";
                         if (enum_def.vals.vec.front()->value)
@@ -373,13 +378,13 @@ namespace flatbuffers {
                                                 const std::string &data_buffer,
                                                 const char *num = nullptr) {
                 auto type = key_field->value.type;
-                auto dest_mask = DestinationMask();
+                auto dest_mask = DestinationMask(type);
                 auto dest_cast = DestinationCast(type);
                 auto getter = data_buffer + "." + FunctionStart('G') + "et";
-                if (GenTypeBasic(type, false) != "byte") {
+                if (GenTypeBasic(type, false) != "UInt8") {
                     getter += MakeCamel(GenTypeBasic(type, false));
                 }
-                getter = dest_cast + getter + "(" + GenOffsetGetter(key_field, num) + ")"
+                getter = dest_cast + getter + "(at: " + GenOffsetGetter(key_field, num) + ")"
                 + dest_mask;
                 return getter;
             }
@@ -438,14 +443,14 @@ namespace flatbuffers {
             void GenStructBody(const StructDef &struct_def, std::string *code_ptr,
                                const char *nameprefix) {
                 std::string &code = *code_ptr;
-                code += "    builder." + FunctionStart('P') + "rep(";
-                code += NumToString(struct_def.minalign) + ", ";
+                code += "    builder." + FunctionStart('P') + "rep(size:";
+                code += NumToString(struct_def.minalign) + ", additionalBytes: ";
                 code += NumToString(struct_def.bytesize) + ");\n";
                 for (auto it = struct_def.fields.vec.rbegin();
                      it != struct_def.fields.vec.rend(); ++it) {
                     auto &field = **it;
                     if (field.padding) {
-                        code += "    builder." + FunctionStart('P') + "ad(";
+                        code += "    builder." + FunctionStart('P') + "ad(size: ";
                         code += NumToString(field.padding) + ");\n";
                     }
                     if (IsStruct(field.value.type)) {
@@ -457,6 +462,9 @@ namespace flatbuffers {
                         code += SourceCast(field.value.type);
                         auto argname = nameprefix + MakeCamel(field.name, false);
                         code += argname;
+                        if (IsEnum(field.value.type)) {
+                            code += ".rawValue";
+                        }
                         code += ");\n";
                     }
                 }
@@ -485,11 +493,11 @@ namespace flatbuffers {
             
             std::string GenLookupKeyGetter(flatbuffers::FieldDef *key_field) {
                 std::string key_getter = "      ";
-                key_getter += "int tableOffset = Table.";
+                key_getter += "let tableOffset = Table.";
                 key_getter += "__indirect(vectorLocation + 4 * (start + middle)";
                 key_getter += ", bb);\n      ";
                 if (key_field->value.type.base_type == BASE_TYPE_STRING) {
-                    key_getter += "int comp = Table.";
+                    key_getter += "let comp = Table.";
                     key_getter += FunctionStart('C') + "ompareStrings(";
                     key_getter += GenOffsetGetter(key_field);
                     key_getter += ", byteKey, bb);\n";
@@ -497,7 +505,7 @@ namespace flatbuffers {
                     auto get_val = GenGetterForLookupByKey(key_field, "bb");
                         key_getter += GenTypeNameDest(key_field->value.type) + " val = ";
                         key_getter += get_val + ";\n";
-                        key_getter += "      int comp = val > key ? 1 : val < key ? -1 : 0;\n";
+                        key_getter += "      let comp = val > key ? 1 : val < key ? -1 : 0;\n";
                 }
                 return key_getter;
             }
@@ -543,7 +551,7 @@ namespace flatbuffers {
                 code += " __p = ";
                     code += struct_def.fixed ? "Struct()" : "Table()";
                 code += " \n\n";
-                code += "  public init() { super.init() }\n\n";
+                code += "  public init() {  }\n\n";
                 
                         code += "  public var byteBuffer : ByteBuffer { get { return __p.bb; } }\n";
                 
@@ -557,21 +565,21 @@ namespace flatbuffers {
                     
                     // create convenience method that doesn't require an existing object
                     code += method_signature + "(_ _bb: ByteBuffer) -> " + struct_def.name;
-                    code += " { return " + method_name + "(_bb, " + struct_def.name+ "()); }\n";
+                    code += " { var obj = " + struct_def.name + "(); return " + method_name + "(_bb, &obj); }\n";
                     
                     // create method that allows object reuse
-                    code += method_signature + "(_ _bb: ByteBuffer, _ obj: " + struct_def.name + ") { ";
-                    code += "return (obj.__assign(_bb." + FunctionStart('G') + "etInt(_bb.";
-                    code += "offset";
-                    code += ") + _bb.";
-                    code += "offset";
+                    code += method_signature + "(_ _bb: ByteBuffer, _ obj: inout " + struct_def.name + ") -> " + struct_def.name + " { ";
+                    code += "return (obj.__assign(Int(_bb." + FunctionStart('G') + "etInt32(at: _bb.";
+                    code += "position";
+                    code += ")) + _bb.";
+                    code += "position";
                     code += ", _bb)); }\n";
                     if (parser_.root_struct_def_ == &struct_def) {
                         if (parser_.file_identifier_.length()) {
                             // Check if a buffer has the identifier.
                             code += "  public static ";
                             code += "func " + struct_def.name;
-                            code += "BufferHasIdentifier(_ _bb: ByteBuffer) : Bool { return ";
+                            code += "BufferHasIdentifier(_ _bb: ByteBuffer) -> Bool { return ";
                             code += "Table.__has_identifier(_bb, \"";
                             code += parser_.file_identifier_;
                             code += "\"); }\n";
@@ -580,10 +588,10 @@ namespace flatbuffers {
                 }
                 // Generate the __init method that sets the field in a pre-existing
                 // accessor object. This is to allow object reuse.
-                code += "  public func __init(_ i : Int, _ _bb: ByteBuffer) ";
+                code += "  public mutating func __init(_ _i : Int, _ _bb: ByteBuffer) ";
                 code += "{ __p.bb_pos = _i; ";
                 code += "__p.bb = _bb; }\n";
-                code += "  public func __assign(_ _i: Int, _ _bb: ByteBuffer) -> " + struct_def.name;
+                code += "  public mutating func __assign(_ _i: Int, _ _bb: ByteBuffer) -> " + struct_def.name;
                 code += " { __init(_i, _bb); return self; }\n\n";
                 for (auto it = struct_def.fields.vec.begin();
                      it != struct_def.fields.vec.end();
@@ -601,20 +609,24 @@ namespace flatbuffers {
                          (field.value.type.base_type == BASE_TYPE_VECTOR &&
                           field.value.type.element == BASE_TYPE_STRUCT))) {
                              optional = "?";
-                             conditional_cast = "(" + type_name_dest + optional + ")";
+                             conditional_cast = type_name_dest + optional;
                          }
-                    std::string dest_mask = DestinationMask();
+                    std::string dest_mask = DestinationMask(field.value.type);
                     std::string dest_cast = DestinationCast(field.value.type);
                     std::string src_cast = SourceCast(field.value.type);
-                    std::string method_start = "  public var " +
-                    MakeCamel(field.name, false) + " : " + type_name_dest + optional + " ";
+                    std::string method_start = "  public var " + MakeCamel(field.name, false) + " : " + type_name_dest + optional + " ";
+                    if (field.value.type.base_type == BASE_TYPE_UNION) {
+                        method_start = "    public func " + MakeCamel(field.name, false) + "<TTable : FlatbufferObject>() -> TTable? ";
+                    } else if (field.value.type.base_type == BASE_TYPE_VECTOR) {
+                        method_start = "    public func " + MakeCamel(field.name, false) + "";
+                    }
                     std::string obj = type_name + "()";
                     
                     // Most field accessors need to retrieve and test the field offset first,
                     // this is the prefix code for that:
                     auto offset_prefix = " { let o = __p.__offset(" +
                     NumToString(field.value.offset) +
-                    "); return o != 0 ? ";
+                    "); if o != 0 { ";
                     // Generate the accessors that don't do object reuse.
                     if (field.value.type.base_type == BASE_TYPE_STRUCT) {
                         // Calls the accessor that takes an accessor object with a new object.
@@ -631,7 +643,6 @@ namespace flatbuffers {
                     } else if (field.value.type.base_type == BASE_TYPE_UNION) {
                             // Union types in C# use generic Table-derived type for better type
                             // safety.
-                            method_start += "<TTable>";
                             type_name = type_name_dest;
                     }
                     std::string getter = dest_cast + GenGetter(field.value.type);
@@ -657,15 +668,15 @@ namespace flatbuffers {
                         member_suffix += "} ";
                         if (struct_def.fixed) {
                             code += " { return " + getter;
-                            code += "(__p.bb_pos + ";
+                            code += "(at: __p.bb_pos + ";
                             code += NumToString(field.value.offset) + ")";
                             code += dest_mask;
                         } else {
-                            code += offset_prefix + getter;
-                            code += "(o + __p.bb_pos)" + dest_mask;
-                            code += " : " + default_cast;
+                            code += offset_prefix + "return " + getter;
+                            code += "(at: o + __p.bb_pos)" + dest_mask;
+                            code += " } else { return " + default_cast;
                             code += GenDefaultValue(field.value);
-                            code += ")";
+                            code += ") }";
                         }
                     } else {
                         switch (field.value.type.base_type) {
@@ -673,31 +684,38 @@ namespace flatbuffers {
                                 code += " { get";
                                 member_suffix += "} ";
                                 if (struct_def.fixed) {
-                                    code += " { return " + obj + ".__assign(__p.";
+                                    code += " { var obj = " + obj + "; return obj.__assign(__p.";
                                     code += "bb_pos + " + NumToString(field.value.offset) + ", ";
                                     code += "__p.bb)";
                                 } else {
-                                    code += offset_prefix + conditional_cast;
-                                    code += obj + ".__assign(";
+                                    code += offset_prefix;
+                                    code += "var obj = " + obj + "; return obj.__assign(";
                                     code += field.value.type.struct_def->fixed
                                     ? "o + __p.bb_pos"
                                     : "__p.__indirect(o + __p.bb_pos)";
-                                    code += ", __p.bb) : null";
+                                    code += ", __p.bb) } else { return nil }";
                                 }
                                 break;
                             case BASE_TYPE_STRING:
                                 code += " { get";
                                 member_suffix += "} ";
-                                code += offset_prefix + getter + "(o + __p.";
-                                code += "bb_pos) : null";
+                                code += offset_prefix + "return " + getter + "(at: o + __p.";
+                                code += "bb_pos) } else {";
+                                if (field.required) {
+                                    code += " fatalError() }";
+                                } else {
+                                    code += " return nil }";
+                                }
                                 break;
                             case BASE_TYPE_VECTOR: {
                                 auto vectortype = field.value.type.VectorType();
-                                code += "(";
+                                code += "(at j: Int) -> ";
                                 if (vectortype.base_type == BASE_TYPE_STRUCT) {
-                                    getter = obj + ".__assign";
+                                    getter = "var obj = " + obj + "; ";
+                                    code += conditional_cast + offset_prefix + getter + "return obj.__assign(";
+                                } else {
+                                    code += conditional_cast + offset_prefix + "return " + getter +"(at: ";
                                 }
-                                code += "int j)" + offset_prefix + conditional_cast + getter +"(";
                                 auto index = "__p.__vector(o) + j * " +
                                 NumToString(InlineSize(vectortype));
                                 if (vectortype.base_type == BASE_TYPE_STRUCT) {
@@ -708,16 +726,16 @@ namespace flatbuffers {
                                 } else {
                                     code += index;
                                 }
-                                code += ")" + dest_mask + " : ";
+                                code += ")" + dest_mask + " } else { return ";
                                 
                                 code += field.value.type.element == BASE_TYPE_BOOL ? "false" :
-                                (IsScalar(field.value.type.element) ? default_cast + "0" : "null");
+                                (IsScalar(field.value.type.element) ? default_cast + "0" : "nil");
+                                code += " } ";
                                 break;
                             }
                             case BASE_TYPE_UNION:
-                                    code += "() where TTable : struct, IFlatbufferObject";
-                                    code += offset_prefix + "(TTable?)" + getter;
-                                    code += "<TTable>(o) : null";
+                                    code += offset_prefix + "return " + getter;
+                                    code += "(o) } else { return nil }";
                                 break;
                             default:
                                 assert(0);
@@ -726,11 +744,11 @@ namespace flatbuffers {
                     code += member_suffix;
                     code += "}\n";
                     if (field.value.type.base_type == BASE_TYPE_VECTOR) {
-                        code += "  public int " + MakeCamel(field.name, false);
-                        code += "Length";
+                        code += "  public var " + MakeCamel(field.name, false);
+                        code += "Length : Int";
                         code += " { get";
                         code += offset_prefix;
-                        code += "__p.__vector_len(o) : 0; ";
+                        code += "return __p.__vector_len(o) } else { return 0 }; ";
                         code += "} ";
                         code += "}\n";
                     }
@@ -738,9 +756,9 @@ namespace flatbuffers {
                     if ((field.value.type.base_type == BASE_TYPE_VECTOR &&
                          IsScalar(field.value.type.VectorType().base_type)) ||
                         field.value.type.base_type == BASE_TYPE_STRING) {
-                                code += "  public func Get";
-                                code += MakeCamel(field.name, false);
-                                code += "Bytes() -> ArraySlice<UInt8>? { return ";
+                                code += "  public func get";
+                                code += MakeCamel(field.name, true);
+                                code += "Bytes() -> UnsafeMutableRawBufferPointer? { return ";
                                 code += "__p.__vector_as_arraysegment(";
                                 code += NumToString(field.value.offset);
                                 code += "); }\n";
@@ -756,17 +774,17 @@ namespace flatbuffers {
                         + "As" + nested_type_name;
                         auto getNestedMethodName = nestedMethodName;
                             getNestedMethodName = "Get" + nestedMethodName;
-                            conditional_cast = "(" + nested_type_name + "?)";
+                            conditional_cast = nested_type_name + "?";
 
                             obj = "(" + nested_type_name + "())";
                         code += "  public " + nested_type_name + "? ";
                         code += getNestedMethodName + "(";
                         code += ") { let o = __p.__offset(";
                         code += NumToString(field.value.offset) +"); ";
-                        code += "return o != 0 ? " + conditional_cast + obj + ".__assign(";
+                        code += "    if o != 0 {\n    var obj = " + obj + "; return obj.__assign(";
                         code += "__p.";
                         code += "__indirect(__p.__vector(o)), ";
-                        code += "__p.bb) : null; }\n";
+                        code += "__p.bb) } else { return nil } }\n";
                     }
                     // Generate mutators for scalar fields or vectors of scalars.
                     if (parser_.opts.mutable_buffer) {
@@ -852,7 +870,7 @@ namespace flatbuffers {
                             auto &field = **it;
                             if (field.deprecated) continue;
                             code += ",\n      ";
-                            code += field.name;
+                            code += MakeCamel(field.name, false);
                             if (!IsScalar(field.value.type.base_type)) code += "Offset";
                             code += ": ";
                             code += GenTypeBasic(DestinationType(field.value.type));
@@ -861,7 +879,7 @@ namespace flatbuffers {
                                 code += GenDefaultValueBasic(field.value);
                         }
                         code += ") -> " + GenOffsetType(struct_def) + " {\n    builder.";
-                        code += FunctionStart('S') + "tartObject(";
+                        code += FunctionStart('S') + "tartObject(numFields: ";
                         code += NumToString(struct_def.fields.vec.size()) + ");\n";
                         for (size_t size = struct_def.sortbysize ? sizeof(largest_scalar_t) : 1;
                              size;
@@ -874,8 +892,10 @@ namespace flatbuffers {
                                      size == SizeOf(field.value.type.base_type))) {
                                         code += "    " + struct_def.name + ".";
                                         code += FunctionStart('A') + "dd";
-                                        code += MakeCamel(field.name) + "(builder, " + field.name;
-                                        if (!IsScalar(field.value.type.base_type)) code += "Offset";
+                                        auto name = MakeCamel(field.name, false);
+                                        if (!IsScalar(field.value.type.base_type)) name += "Offset";
+                                        code += MakeCamel(field.name) + "(builder, " + name + ": " + name;
+                                        
                                         code += ");\n";
                                     }
                             }
@@ -892,7 +912,7 @@ namespace flatbuffers {
                     code += "  public static func " + FunctionStart('S') + "tart";
                     code += struct_def.name;
                     code += "(_ builder: FlatBufferBuilder) { builder.";
-                    code += FunctionStart('S') + "tartObject(";
+                    code += FunctionStart('S') + "tartObject(numFields: ";
                     code += NumToString(struct_def.fields.vec.size()) + "); }\n";
                     for (auto it = struct_def.fields.vec.begin();
                          it != struct_def.fields.vec.end(); ++it) {
@@ -909,11 +929,18 @@ namespace flatbuffers {
                         code += GenMethod(field.value.type) + "(";
                         code += NumToString(it - struct_def.fields.vec.begin()) + ", ";
                         code += SourceCastBasic(field.value.type);
-                        code += argname;
+                        std::string passedArg = argname;
                         if (!IsScalar(field.value.type.base_type) &&
                             field.value.type.base_type != BASE_TYPE_UNION) {
-                            code += ".value";
+                            passedArg += ".value";
+                        } else if (field.value.type.enum_def != nullptr) {
+                            if (IsScalar(field.value.type.base_type)) {
+                                passedArg += ".rawValue";
+                            } else {
+                                passedArg = "Int(" + passedArg + ")";
+                            }
                         }
+                        code += passedArg;
                         code += ", ";
                         code += GenDefaultValue(field.value, false);
                         code += "); }\n";
@@ -928,13 +955,11 @@ namespace flatbuffers {
                                 code += MakeCamel(field.name);
                                 code += "Vector(_ builder: FlatBufferBuilder, data: [";
                                 code += GenTypeBasic(vector_type) + "]) -> " + GenVectorOffsetType();
-                                code += " { builder." + FunctionStart('S') + "tartVector(";
+                                code += " { builder." + FunctionStart('S') + "tartVector(elemSize: ";
                                 code += NumToString(elem_size);
-                                code += ", data." + FunctionStart('L') + "ength, ";
+                                code += ", count: data.count, alignment: ";
                                 code += NumToString(alignment);
-                                code += "); for (int i = data.";
-                                code += FunctionStart('L') + "ength - 1; i >= 0; i--) builder.";
-                                code += FunctionStart('A') + "dd";
+                                code += "); for i in (0..<data.count).reversed() { builder.add";
                                 code += GenMethod(vector_type);
                                 code += "(";
                                 code += SourceCastBasic(vector_type, false);
@@ -942,16 +967,16 @@ namespace flatbuffers {
                                 if ((vector_type.base_type == BASE_TYPE_STRUCT ||
                                      vector_type.base_type == BASE_TYPE_STRING))
                                     code += ".value";
-                                code += "); return ";
+                                code += "); }; return ";
                                 code += "builder." + FunctionStart('E') + "ndVector(); }\n";
                             }
                             // Generate a method to start a vector, data to be added manually after.
                             code += "  public static func " + FunctionStart('S') + "tart";
                             code += MakeCamel(field.name);
                             code += "Vector(_ builder: FlatBufferBuilder, numElems: Int) ";
-                            code += "{ builder." + FunctionStart('S') + "tartVector(";
+                            code += "{ builder." + FunctionStart('S') + "tartVector(elemSize: ";
                             code += NumToString(elem_size);
-                            code += ", numElems, " + NumToString(alignment);
+                            code += ", count: numElems, alignment: " + NumToString(alignment);
                             code += "); }\n";
                         }
                     }
@@ -971,41 +996,37 @@ namespace flatbuffers {
                     }
                     code += "    return " + GenOffsetConstruct(struct_def, "o") + ";\n  }\n";
                     if (parser_.root_struct_def_ == &struct_def) {
-                        code += "  public static void ";
+                        code += "  public static func ";
                         code += FunctionStart('F') + "inish" + struct_def.name;
-                        code += "Buffer(FlatBufferBuilder builder, " + GenOffsetType(struct_def);
-                        code += " offset) {";
-                        code += " builder." + FunctionStart('F') + "inish(offset";
-                            code += ".value";
-                        
+                        code += "Buffer(_ builder: FlatBufferBuilder, _ offset: " + GenOffsetType(struct_def);
+                        code += ") {";
+                        code += " builder." + FunctionStart('F') + "inish(rootTable: offset.value";
                         if (parser_.file_identifier_.length())
-                            code += ", \"" + parser_.file_identifier_ + "\"";
+                            code += ", fileIdentifier: \"" + parser_.file_identifier_ + "\"";
                         code += "); }\n";
                     }
                 }
                 if (struct_def.has_key) {
 
-                        code += "\n  public static VectorOffset ";
-                        code += "CreateMySortedVectorOfTables(_ builder: FlatBufferBuilder, ";
-                        code += "_ offsets: [Offset<" + struct_def.name + ">";
-                        code += "]) {\n";
-                        code += "    Array.Sort(offsets, (Offset<" + struct_def.name +
-                        "> o1, Offset<" + struct_def.name + "> o2) => " + GenKeyGetter(key_field);
-                        code += ");\n";
-                        code += "    return builder.CreateVectorOfTables(offsets);\n  }\n";
+                        code += "\n  public static func ";
+                        code += "createMySortedVectorOfTables(_ builder: FlatBufferBuilder, ";
+                        code += "_ offsets: inout [Offset<" + struct_def.name + ">";
+                        code += "]) -> VectorOffset {\n";
+                        code += "    offsets.sort { (o1, o2) in\n " + GenKeyGetter(key_field);
+                        code += " < 0; }\n";
+                        code += "    return builder.createVectorOfTables(offsets);\n  }\n";
                     
                     code += "\n  public static func";
-                    code += " " + FunctionStart('L') + "ookupByKey(" + GenVectorOffsetType();
-                    code += " vectorOffset, " + GenTypeNameDest(key_field->value.type);
-                    code += " key, _ bb: ByteBuffer) -> " + struct_def.name + "? {\n";
+                    code += " " + FunctionStart('L') + "ookupByKey(vectorOffset: " + GenVectorOffsetType();
+                    code += ", key: " + GenTypeNameDest(key_field->value.type);
+                    code += ", _ bb: ByteBuffer) -> " + struct_def.name + "? {\n";
                     if (key_field->value.type.base_type == BASE_TYPE_STRING) {
-                        code += "    byte[] byteKey = ";
-                            code += "System.Text.Encoding.UTF8.GetBytes(key);\n";
-                    code += "    int vectorLocation = " + GenByteBufferLength("bb");
+                        code += "    let byteKey = key.utf8CString\n";
+                    code += "    var vectorLocation = " + GenByteBufferLength("bb");
                     code += " - vectorOffset";
                     code += ".value";
                     code += ";\n    var span = ";
-                    code += "bb." + FunctionStart('G') + "etInt(vectorLocation);\n";
+                    code += "Int(bb." + FunctionStart('G') + "etInt32(at: vectorLocation));\n";
                     code += "    var start = 0;\n";
                     code += "    vectorLocation += 4;\n";
                     code += "    while (span != 0) {\n";
@@ -1018,15 +1039,17 @@ namespace flatbuffers {
                     code += "        start += middle;\n";
                     code += "        span -= middle;\n";
                     code += "      } else {\n";
-                    code += "        return new " + struct_def.name;
-                    code += "().__assign(tableOffset, bb);\n";
+                    code += "        var obj = " + struct_def.name + "();\n";
+                    code += "        return obj";
+                    code += ".__assign(tableOffset, bb);\n";
                     code += "      }\n    }\n";
-                    code += "    return null;\n";
+                    code += "    return nil;\n";
                     code += "  }\n";
                 }
+            }
+                
                 code += "}";
                 code += "\n\n";
-            }
             }
         };
     }  // namespace swift

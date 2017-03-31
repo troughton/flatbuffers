@@ -10,10 +10,10 @@
 /// <summary>
 /// This is the base for both structs and tables.
 /// </summary>
-public protocol IFlatbufferObject {
+public protocol FlatbufferObject {
     init()
     
-    func __init(_ _i: Int, _ _bb: ByteBuffer)
+    mutating func __init(_ _i: Int, _ _bb: ByteBuffer)
     
     var byteBuffer : ByteBuffer { get }
 }

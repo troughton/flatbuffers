@@ -27,16 +27,19 @@ namespace flatbuffers {
 // Convert an underscore_based_indentifier in to camelCase.
 // Also uppercases the first character if first is true.
 std::string MakeCamel(const std::string &in, bool first) {
-  std::string s;
-  for (size_t i = 0; i < in.length(); i++) {
-    if (!i && first)
-      s += static_cast<char>(toupper(in[0]));
-    else if (in[i] == '_' && i + 1 < in.length())
-      s += static_cast<char>(toupper(in[++i]));
-    else
-      s += in[i];
-  }
-  return s;
+    std::string s;
+    for (size_t i = 0; i < in.length(); i++) {
+        if (!i)
+            if (first)
+                s += static_cast<char>(toupper(in[0]));
+            else
+                s += static_cast<char>(tolower(in[0]));
+            else if (in[i] == '_' && i + 1 < in.length())
+                s += static_cast<char>(toupper(in[++i]));
+            else
+                s += in[i];
+    }
+    return s;
 }
 
 // These arrays need to correspond to the IDLOptions::k enum.

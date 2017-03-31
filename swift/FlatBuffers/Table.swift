@@ -12,8 +12,13 @@ import Foundation
 /// All tables in the generated code derive from this struct, and add their own accessors.
 /// </summary>
 public struct Table {
-    public let bb_pos : Int
-    public let bb : ByteBuffer;
+    
+    public init() {
+        
+    }
+    
+    public var bb_pos : Int = 0
+    public var bb : ByteBuffer! = nil
     
     public var byteBuffer : ByteBuffer { get { return bb } }
     
@@ -44,7 +49,7 @@ public struct Table {
     }
     
     // Create a String from UTF-8 data stored inside the flatbuffer.
-    public func __string(offset: Int) -> String {
+    public func __string(at offset: Int) -> String {
         var offset = offset
         offset += Int(bb.getInt32(at: offset))
         let len = Int(bb.getInt32(at: offset))
@@ -88,10 +93,10 @@ public struct Table {
     }
     
     // Initialize any Table-derived type to point to the union at the given offset.
-    public func __union<T>(_ offset: Int) -> T where T : IFlatbufferObject {
+    public func __union<T>(_ offset: Int) -> T where T : FlatbufferObject {
         var offset = offset
         offset += bb_pos;
-        let t = T()
+        var t = T()
         t.__init(offset + Int(bb.getInt32(at: offset)), bb)
         return t;
     }
@@ -133,7 +138,7 @@ public struct Table {
     }
     
     // Compare string from the ByteBuffer with the string object
-    public static func compareStrings(_ offset_1: Int, _ key: UnsafeBufferPointer<UInt8>, _ bb: ByteBuffer) -> Int {
+    public static func compareStrings(_ offset_1: Int, _ key: ContiguousArray<CChar>, _ bb: ByteBuffer) -> Int {
             var offset_1 = offset_1
         
         offset_1 += Int(bb.getInt32(at: offset_1))
@@ -144,7 +149,7 @@ public struct Table {
         let bbArray = bb.data
         
         for i in 0..<len {
-            if (bbArray[i + startPos_1] != key[i]) {
+            if (bbArray[i + startPos_1] != UInt8(bitPattern: key[i])) {
                 return Int(bbArray[i + startPos_1]) - Int(key[i]);
             }
         }

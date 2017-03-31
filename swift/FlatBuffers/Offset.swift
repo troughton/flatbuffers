@@ -9,7 +9,7 @@
 public struct Offset<T> {
     public let value : Int
     
-    init(_ value: Int) {
+    public init(_ value: Int) {
         self.value = value
     }
 }
@@ -17,7 +17,7 @@ public struct Offset<T> {
 public struct VectorOffset {
     public let value : Int
     
-    init(_ value: Int) {
+    public init(_ value: Int) {
         self.value = value
     }
 }
@@ -25,7 +25,7 @@ public struct VectorOffset {
 public struct StringOffset {
     public let value : Int
     
-    init(_ value: Int) {
+    public init(_ value: Int) {
         self.value = value
     }
 }

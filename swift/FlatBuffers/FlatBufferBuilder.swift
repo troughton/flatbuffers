@@ -515,7 +515,7 @@ public final class FlatBufferBuilder {
         assert(_vtableSize >= 0, "Flatbuffers: calling endObject without a startObject")
         
         addInt32(0)
-        var vtableloc = self.offset
+        let vtableloc = self.offset
         
         // Write out the current vtable.
         for i in (0..<_vtableSize).reversed() {
